@@ -1,10 +1,10 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 
-var {mongoose} = require('./db/mongoose');
-var {Todo} = require('./models/todo');
-var {User} = require('./models/user');
-
+var { mongoose } = require('./db/mongoose');
+var { Todo } = require('./models/todo');
+var { User } = require('./models/user');
+var { ObjectID } = require('mongodb');
 var app = express();
 
 app.use(bodyParser.json());
@@ -22,13 +22,32 @@ app.post('/todos', (req, res) => {
 });
 
 
-app.get('/todos',(req,res)=>{
-  Todo.find().then((todos)=>{
+app.get('/todos', (req, res) => {
+  Todo.find().then((todos) => {
 
-    res.send({'todos':todos});
-  }).catch((e)=>{
-    res.status(400).send({'error':e});
+    res.send({ 'todos': todos });
+  }).catch((e) => {
+    res.status(400).send({ 'error': e });
   });
+})
+
+
+app.delete('/todos/:id', (req, res) => {
+  var id = req.params.id;
+  if (!ObjectID.isValid(id))
+    return res.status('404').send({ 'error': 'invalide object Id' });
+
+  Todo.findByIdAndRemove(id).then((todo) => {
+
+    if (!todo) {
+      return res.status(404).send({'error':'invalide Todos'});
+    }
+
+
+    res.status(200).send({todo});
+  }).catch((e) => {
+    res.status(404).send((e));
+  })
 })
 
 app.listen(3000, () => {
