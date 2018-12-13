@@ -1,3 +1,5 @@
+
+require('../config/config');
 const expect = require('expect');
 const request = require('supertest');
 const { ObjectID } = require('mongodb');
@@ -12,7 +14,9 @@ const todos = [{
   text: 'First test todo'
 }, {
   _id: new ObjectID(),
-  text: 'Second test todo'
+  text: 'Second test todo',
+  completed:true,
+  completedAt:333
 }];
 
 
@@ -139,7 +143,55 @@ describe('Delete / todos', () => {
       expect(res.body.error).toBe('invalide object Id');
       done();
     });
-  })
+  });
+
+
+});
+
+
+describe('Patch / todos',()=>{
+  it('should update a todos',(done)=>{
+
+
+    var hexId = todos[0]._id.toHexString();
+    request(app)
+    .patch(`/todos/${hexId}`)
+    .send({text:'PIPO',completed:true})
+    .expect(200)
+    .end((err,res)=>{
+   
+      if(err)
+      done(err);
+      
+     expect(res.body.todo.text).toBe('PIPO');
+     done();
+
+   
+    });
+
+    
+  });
+
+  it('show update todo to false and created at to null', (done) => {
+
+    var hexId = todos[0]._id.toHexString();
+    
+    request(app)
+    .patch(`/todos/${hexId}`)
+    .send({text:'PIPO',completed:false})
+    .expect(200)
+    .end((err,res)=>{
+      if(err)
+      done(err);
+      expect(res.body.todo.text).toBe('PIPO');
+      expect(res.body.todo.completedAt).toNotExist();
+      expect(res.body.todo.completed).toBeFalsy();
+      done();
+    });
+  });
+
+
+  
 })
 
 
