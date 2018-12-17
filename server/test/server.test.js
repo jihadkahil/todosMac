@@ -252,6 +252,64 @@ describe('Post users',()=>{
     .end(done);
   })
 
+  // it('should login',(done)=>{
+  //   request(app)
+  //   .post('/users/login')
+  //   .send(users[0])
+  //   .expect(200)
+  //   .expect((res)=>{
+  //     expect(res.body.email).toBe(users[0].email);
+  //   }).end((err,res)=>{
+  //     if(err)
+  //     done(err);
+
+  //     User.findOne({'email':res.body.email}).then((user)=>{
+  //       expect(user.tokens).toContain({
+  //         access: 'auth',
+  //         token: res.headers['x-auth']
+  //       });
+  //       done();
+  //     }).catch((e)=>{
+  //       done(e);
+  //     })
+  //   })
+  // })
+
+  // it('should reject invalid login', (done) => {
+  //   request(app)
+  //     .post('/users/login')
+  //     .send({
+  //       email: users[1].email,
+  //       password: users[1].password + '1'
+  //     })
+  //     .expect(400)
+  //     .expect((res) => {
+  //       expect(res.headers['x-auth']).toNotExist();
+  //     })
+  //     .end((err, res) => {
+  //       if (err) {
+  //         return done(err);
+  //       }
+
+  //       User.findById(users[1]._id).then((user) => {
+  //         expect(user.tokens.length).toBe(1);
+  //         done();
+  //       }).catch((e) => done(e));
+  //     });
+  // });
 
 
+  describe('Delete /users/me/token',()=>{
+    it('should delet token',(done)=>{
+      request(app)
+      .delete('/users/me/token')
+      .set('x-auth',users[0].tokens[0].token)
+      .expect(200)
+      .expect((res)=>{
+
+        expect(res.body).toBe({'success':true});
+        
+      }).end(done);
+    })
+  })
 });
