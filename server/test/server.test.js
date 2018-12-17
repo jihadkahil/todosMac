@@ -1,115 +1,257 @@
-require('./config/config');
-
-const _ = require('lodash');
-const express = require('express');
-const bodyParser = require('body-parser');
+const expect = require('expect');
+const request = require('supertest');
 const {ObjectID} = require('mongodb');
 
-var {mongoose} = require('./db/mongoose');
-var {Todo} = require('./models/todo');
-var {User} = require('./models/user');
+const {app} = require('./../server');
+const {Todo} = require('./../models/todo');
+const {User} = require('./../models/user');
+const{todos,users,popuateTodos,populateUsers} = require('./seed/seed');
+beforeEach(populateUsers);
+beforeEach(popuateTodos);
 
-var app = express();
-const port = process.env.PORT;
+console.log(users);
 
-app.use(bodyParser.json());
 
-app.post('/todos', (req, res) => {
-  var todo = new Todo({
-    text: req.body.text
+describe('POST /todos', () => {
+  it('should create a new todo', (done) => {
+    var text = 'Test todo text';
+
+    request(app)
+      .post('/todos')
+      .send({text})
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.text).toBe(text);
+      })
+      .end((err, res) => {
+        if (err) {
+          return done(err);
+        }
+
+        Todo.find({text}).then((todos) => {
+          expect(todos.length).toBe(1);
+          expect(todos[0].text).toBe(text);
+          done();
+        }).catch((e) => done(e));
+      });
   });
 
-  todo.save().then((doc) => {
-    res.send(doc);
-  }, (e) => {
-    res.status(400).send(e);
+  it('should not create todo with invalid body data', (done) => {
+    request(app)
+      .post('/todos')
+      .send({})
+      .expect(400)
+      .end((err, res) => {
+        if (err) {
+          return done(err);
+        }
+
+        Todo.find().then((todos) => {
+          expect(todos.length).toBe(2);
+          done();
+        }).catch((e) => done(e));
+      });
   });
 });
 
-app.get('/todos', (req, res) => {
-  Todo.find().then((todos) => {
-    res.send({todos});
-  }, (e) => {
-    res.status(400).send(e);
+describe('GET /todos', () => {
+  it('should get all todos', (done) => {
+    request(app)
+      .get('/todos')
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.todos.length).toBe(2);
+      })
+      .end(done);
   });
 });
 
-app.get('/todos/:id', (req, res) => {
-  var id = req.params.id;
+describe('GET /todos/:id', () => {
+  it('should return todo doc', (done) => {
+    request(app)
+      .get(`/todos/${todos[0]._id.toHexString()}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.todo.text).toBe(todos[0].text);
+      })
+      .end(done);
+  });
 
-  if (!ObjectID.isValid(id)) {
-    return res.status(404).send();
-  }
+  it('should return 404 if todo not found', (done) => {
+    var hexId = new ObjectID().toHexString();
 
-  Todo.findById(id).then((todo) => {
-    if (!todo) {
-      return res.status(404).send();
+    request(app)
+      .get(`/todos/${hexId}`)
+      .expect(404)
+      .end(done);
+  });
+
+  it('should return 404 for non-object ids', (done) => {
+    request(app)
+      .get('/todos/123abc')
+      .expect(404)
+      .end(done);
+  });
+});
+
+describe('DELETE /todos/:id', () => {
+  it('should remove a todo', (done) => {
+    var hexId = todos[1]._id.toHexString();
+
+    request(app)
+      .delete(`/todos/${hexId}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.todo._id).toBe(hexId);
+      })
+      .end((err, res) => {
+        if (err) {
+          return done(err);
+        }
+
+        Todo.findById(hexId).then((todo) => {
+          expect(todo).toNotExist();
+          done();
+        }).catch((e) => done(e));
+      });
+  });
+
+  it('should return 404 if todo not found', (done) => {
+    var hexId = new ObjectID().toHexString();
+
+    request(app)
+      .delete(`/todos/${hexId}`)
+      .expect(404)
+      .end(done);
+  });
+
+  it('should return 404 if object id is invalid', (done) => {
+    request(app)
+      .delete('/todos/123abc')
+      .expect(404)
+      .end(done);
+  });
+});
+
+describe('PATCH /todos/:id', () => {
+  it('should update the todo', (done) => {
+    var hexId = todos[0]._id.toHexString();
+    var text = 'This should be the new text';
+
+    request(app)
+      .patch(`/todos/${hexId}`)
+      .send({
+        completed: true,
+        text
+      })
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.todo.text).toBe(text);
+        expect(res.body.todo.completed).toBe(true);
+        expect(res.body.todo.completedAt).toBeA('number');
+      })
+      .end(done);
+  });
+
+  it('should clear completedAt when todo is not completed', (done) => {
+    var hexId = todos[1]._id.toHexString();
+    var text = 'This should be the new text!!';
+
+    request(app)
+      .patch(`/todos/${hexId}`)
+      .send({
+        completed: false,
+        text
+      })
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.todo.text).toBe(text);
+        expect(res.body.todo.completed).toBe(false);
+        expect(res.body.todo.completedAt).toNotExist();
+      })
+      .end(done);
+  });
+});
+
+
+describe('Get /User/me',()=>{
+  it('should return User from authentication token ',(done)=>{
+   
+    request(app)
+    .get('/users/me')
+    .set('x-auth',users[0].tokens[0].token)
+    .expect(200)
+    .expect((res)=>{
+      expect(res.body.email).toBe('jihadkahil.96@gmail.com');
+      expect(res.body._id).toBe(users[0]._id.toHexString());
+
+    }).end(done);
+
+  });
+
+
+  it('should retrun 401 if user not authenticated',(done)=>{
+
+    request(app)
+    .get('/users/me')
+    .set('x-auth','123')
+    .expect(401)
+    .expect((res)=>{
+      expect(res.body).toEqual({"error":"invalide sesssion"});
+    })
+    .end(done);
+  });
+});
+
+describe('Post users',()=>{
+  it('should create a user with authentication Token and Hashed Password',(done)=>{
+    var body = {
+      'email':'imadKahil.93@gmail.com',
+      'password':'12345678'
     }
+    request(app)
+    .post('/users')
+    .send(body)
+    .expect((res)=>{
+      expect(res.body.email).toBe(body.email);
+      expect(res.body.password).toNotExist();
+      expect(res.headers['x-auth']).toExist();
 
-    res.send({todo});
-  }).catch((e) => {
-    res.status(400).send();
+    }).end((err,res)=>{
+      if(err)
+      return done(err);
+
+
+      User.findById(res.body._id).then((user)=>{
+
+        expect((user.password)).toNotBe(body.password);
+        expect(user.tokens.length).toBe(1);
+        done();
+      });
+      
+
+
+    });
   });
-});
 
-app.delete('/todos/:id', (req, res) => {
-  var id = req.params.id;
-
-  if (!ObjectID.isValid(id)) {
-    return res.status(404).send();
-  }
-
-  Todo.findByIdAndRemove(id).then((todo) => {
-    if (!todo) {
-      return res.status(404).send();
-    }
-
-    res.send({todo});
-  }).catch((e) => {
-    res.status(400).send();
+  it('should retrun invalid',(done)=>{
+    request(app)
+    .post('/users')
+    .send({
+      'email':'asd',
+      'password':"123"
+    }).expect(400)
+    .end(done);
   });
-});
 
-app.patch('/todos/:id', (req, res) => {
-  var id = req.params.id;
-  var body = _.pick(req.body, ['text', 'completed']);
-
-  if (!ObjectID.isValid(id)) {
-    return res.status(404).send();
-  }
-
-  if (_.isBoolean(body.completed) && body.completed) {
-    body.completedAt = new Date().getTime();
-  } else {
-    body.completed = false;
-    body.completedAt = null;
-  }
-
-  Todo.findByIdAndUpdate(id, {$set: body}, {new: true}).then((todo) => {
-    if (!todo) {
-      return res.status(404).send();
-    }
-
-    res.send({todo});
-  }).catch((e) => {
-    res.status(400).send();
+  it('should retrun duplicate',(done)=>{
+    request(app)
+    .post('/users')
+    .send(users[0])
+    .expect(400)
+    .end(done);
   })
+
+
+
 });
-
-// POST /users
-app.post('/users', (req, res) => {
-  var body = _.pick(req.body, ['email', 'password']);
-  var user = new User(body);
-
-  user.save().then((user) => {
-    res.send(user);
-  }).catch((e) => {
-    res.status(400).send(e);
-  })
-});
-
-app.listen(port, () => {
-  console.log(`Started up at port ${port}`);
-});
-
-module.exports = {app};
